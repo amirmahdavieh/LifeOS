@@ -40,3 +40,27 @@ const columns = db.prepare('PRAGMA table_info(tasks)').all();
 if (!columns.some((c) => c.name === 'recurringId')) {
   db.exec('ALTER TABLE tasks ADD COLUMN recurringId TEXT');
 }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS spending (
+    id TEXT PRIMARY KEY,
+    amount REAL NOT NULL,
+    date TEXT NOT NULL,
+    category TEXT NOT NULL,
+    merchant TEXT NOT NULL,
+    notes TEXT,
+    paymentMethod TEXT
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    monthlyPrice REAL NOT NULL,
+    billingDate INTEGER NOT NULL,
+    category TEXT,
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1
+  )
+`);

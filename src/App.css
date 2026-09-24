@@ -1,7 +1,45 @@
-.app {
+.lifeos {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+}
+
+.lifeos-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.lifeos-topbar__brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-right: 8px;
+}
+.lifeos-topbar__nav {
+  display: flex;
+  gap: 2px;
+  background: #f0f0f2;
+  border-radius: 7px;
+  padding: 2px;
+}
+
+.lifeos-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -425,6 +463,8 @@
 .field input[type='text'],
 .field input[type='date'],
 .field input[type='time'],
+.field input[type='number'],
+.field select,
 .field textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -434,6 +474,7 @@
   width: 100%;
 }
 .field input:focus,
+.field select:focus,
 .field textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;

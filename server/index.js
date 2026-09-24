@@ -185,6 +185,146 @@ app.delete('/api/tasks/:id', (req, res) => {
   res.status(204).end();
 });
 
+function rowToSpending(row) {
+  return {
+    id: row.id,
+    amount: row.amount,
+    date: row.date,
+    category: row.category,
+    merchant: row.merchant,
+    notes: row.notes ?? undefined,
+    paymentMethod: row.paymentMethod ?? undefined,
+  };
+}
+
+function rowToSubscription(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    monthlyPrice: row.monthlyPrice,
+    billingDate: row.billingDate,
+    category: row.category ?? undefined,
+    notes: row.notes ?? undefined,
+    active: !!row.active,
+  };
+}
+
+const insertSpendingStmt = db.prepare(
+  `INSERT INTO spending (id, amount, date, category, merchant, notes, paymentMethod) VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+
+app.get('/api/spending', (req, res) => {
+  const rows = db.prepare('SELECT * FROM spending ORDER BY date DESC, rowid DESC').all();
+  res.json(rows.map(rowToSpending));
+});
+
+app.post('/api/spending', (req, res) => {
+  const { amount, date, category, merchant, notes, paymentMethod } = req.body ?? {};
+  if (!amount || !date || !category || !merchant) {
+    return res.status(400).json({ error: 'amount, date, category and merchant are required' });
+  }
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  const id = randomUUID();
+  insertSpendingStmt.run(id, amount, date, category, merchant, notes ?? null, paymentMethod ?? null);
+  const row = db.prepare('SELECT * FROM spending WHERE id = ?').get(id);
+  res.status(201).json(rowToSpending(row));
+});
+
+app.put('/api/spending/:id', (req, res) => {
+  const { id } = req.params;
+  const existing = db.prepare('SELECT * FROM spending WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Spending entry not found' });
+
+  const current = rowToSpending(existing);
+  const merged = { ...current, ...req.body };
+  if (typeof merged.amount !== 'number' || merged.amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  db.prepare(`UPDATE spending SET amount=?, date=?, category=?, merchant=?, notes=?, paymentMethod=? WHERE id=?`).run(
+    merged.amount,
+    merged.date,
+    merged.category,
+    merged.merchant,
+    merged.notes ?? null,
+    merged.paymentMethod ?? null,
+    id
+  );
+  const row = db.prepare('SELECT * FROM spending WHERE id = ?').get(id);
+  res.json(rowToSpending(row));
+});
+
+app.delete('/api/spending/:id', (req, res) => {
+  const { id } = req.params;
+  const existing = db.prepare('SELECT * FROM spending WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Spending entry not found' });
+  db.prepare('DELETE FROM spending WHERE id = ?').run(id);
+  res.status(204).end();
+});
+
+const insertSubscriptionStmt = db.prepare(
+  `INSERT INTO subscriptions (id, name, monthlyPrice, billingDate, category, notes, active) VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+
+app.get('/api/subscriptions', (req, res) => {
+  const rows = db.prepare('SELECT * FROM subscriptions ORDER BY name').all();
+  res.json(rows.map(rowToSubscription));
+});
+
+app.post('/api/subscriptions', (req, res) => {
+  const { name, monthlyPrice, billingDate, category, notes, active } = req.body ?? {};
+  if (!name || monthlyPrice === undefined || billingDate === undefined) {
+    return res.status(400).json({ error: 'name, monthlyPrice and billingDate are required' });
+  }
+  if (typeof monthlyPrice !== 'number' || monthlyPrice < 0) {
+    return res.status(400).json({ error: 'monthlyPrice must be a non-negative number' });
+  }
+  if (!Number.isInteger(billingDate) || billingDate < 1 || billingDate > 31) {
+    return res.status(400).json({ error: 'billingDate must be an integer between 1 and 31' });
+  }
+  const id = randomUUID();
+  insertSubscriptionStmt.run(id, name, monthlyPrice, billingDate, category ?? null, notes ?? null, active === false ? 0 : 1);
+  const row = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(id);
+  res.status(201).json(rowToSubscription(row));
+});
+
+app.put('/api/subscriptions/:id', (req, res) => {
+  const { id } = req.params;
+  const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+
+  const current = rowToSubscription(existing);
+  const merged = { ...current, ...req.body };
+  if (typeof merged.monthlyPrice !== 'number' || merged.monthlyPrice < 0) {
+    return res.status(400).json({ error: 'monthlyPrice must be a non-negative number' });
+  }
+  if (!Number.isInteger(merged.billingDate) || merged.billingDate < 1 || merged.billingDate > 31) {
+    return res.status(400).json({ error: 'billingDate must be an integer between 1 and 31' });
+  }
+  db.prepare(
+    `UPDATE subscriptions SET name=?, monthlyPrice=?, billingDate=?, category=?, notes=?, active=? WHERE id=?`
+  ).run(
+    merged.name,
+    merged.monthlyPrice,
+    merged.billingDate,
+    merged.category ?? null,
+    merged.notes ?? null,
+    merged.active ? 1 : 0,
+    id
+  );
+  const row = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(id);
+  res.json(rowToSubscription(row));
+});
+
+app.delete('/api/subscriptions/:id', (req, res) => {
+  const { id } = req.params;
+  const existing = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+  db.prepare('DELETE FROM subscriptions WHERE id = ?').run(id);
+  res.status(204).end();
+});
+
 // In production, also serve the built frontend from this same server/port.
 const distPath = path.join(__dirname, '..', 'dist');
 app.use(express.static(distPath));

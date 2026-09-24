@@ -18,7 +18,7 @@ async function createWindow() {
     height: 850,
     minWidth: 900,
     minHeight: 600,
-    title: 'Weekly Planner',
+    title: 'LifeOS',
     autoHideMenuBar: true,
     backgroundColor: '#fafafa',
     webPreferences: {

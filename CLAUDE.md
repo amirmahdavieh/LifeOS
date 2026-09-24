@@ -21,17 +21,30 @@ If asked to fix this, restore `scripts` (dev/build/lint/etc.) and `devDependenci
 
 ## Architecture
 
-This is an Electron + React desktop app for planning weekly tasks on a drag/resize calendar grid, backed by a local SQLite database via Express.
+This is **LifeOS**, an Electron + React desktop app with two domains — a **Planner** (weekly task calendar) and **Finance** (daily spending + monthly subscriptions) — both backed by a local SQLite database via one shared Express API.
 
 **Three runtime pieces, one shared server module:**
 
-- `src/` — React 19 + TypeScript frontend (Vite), talks to the API only via `fetch('/api/tasks')` (see `src/store/useTaskStore.ts`, a Zustand store — this is the single source of truth for task state and the only place that calls the API).
+- `src/` — React 19 + TypeScript frontend (Vite).
 - `server/index.js` — Express API (`server/db.js` for the schema). Can run standalone (`node server/index.js`) for browser-only dev, or be imported by Electron.
 - `electron/main.js` — Electron main process. Imports `startServer()` from `server/index.js` directly (no separate HTTP hop at boot) and points the `BrowserWindow` at `http://localhost:<port>`. In production the same Express server also serves the built `dist/` static files and falls back to `index.html` for client-side routing (see the bottom of `server/index.js`).
 
-**Stale duplicate files at repo root:** `main.js` and `db.js` in the repo root are earlier/leaner copies of `electron/main.js` and `server/db.js` respectively (they differ — e.g. root `db.js` lacks the `recurringId` column migration, root `main.js` sets `DB_PATH` directly instead of letting `db.js` resolve an OS-standard app-data directory). `package.json`'s `"main"` field points at `electron/main.js`, so the root copies are not part of the active run path — don't edit them expecting effect; prefer deleting them if doing cleanup, or ask before assuming which is authoritative.
+**Stale duplicate files at repo root:** `main.js` and `db.js` in the repo root are earlier/leaner copies of `electron/main.js` and `server/db.js` respectively (they differ — e.g. root `db.js` lacks the `recurringId` column migration and the new `spending`/`subscriptions` tables, root `main.js` sets `DB_PATH` directly instead of letting `db.js` resolve an OS-standard app-data directory). `package.json`'s `"main"` field points at `electron/main.js`, so the root copies are not part of the active run path — don't edit them expecting effect; prefer deleting them if doing cleanup, or ask before assuming which is authoritative.
 
-**Database location:** `server/db.js` resolves one consistent on-disk SQLite path (`%APPDATA%/weeklyplanner/tasks.db` on Windows, equivalent per-OS paths elsewhere) via `defaultDataDir()`, unless `DB_PATH` env var overrides it — this ensures the dev server, `electron .`, and the packaged app all read/write the same database. Uses Node's built-in `node:sqlite` (`DatabaseSync`), not a third-party driver.
+**Database location:** `server/db.js` resolves one consistent on-disk SQLite path (`%APPDATA%/weeklyplanner/tasks.db` on Windows, equivalent per-OS paths elsewhere) via `defaultDataDir()`, unless `DB_PATH` env var overrides it — this ensures the dev server, `electron .`, and the packaged app all read/write the same database (all three tables — `tasks`, `spending`, `subscriptions` — live in this one file). Uses Node's built-in `node:sqlite` (`DatabaseSync`), not a third-party driver.
+
+### Frontend module structure
+
+`src/App.tsx` is the top-level "LifeOS shell": it renders the `LifeOS` topbar (Planner / Finance tabs) and switches between the two domains, each self-contained:
+
+- `src/planner/PlannerView.tsx` — the entire original Weekly Planner (unchanged behavior), pulling from `src/components/*`, `src/store/useTaskStore.ts`, `src/utils/*`, `src/types.ts`. These planner-internal files were deliberately **not** moved into `src/planner/` when Finance was added, to avoid any risk of regressing working planner code — only the App-level wiring changed.
+- `src/finance/` — the entire Finance module, self-contained:
+  - `FinanceApp.tsx` — Finance's own sub-nav (Overview / Spending / Subscriptions) and data loading (`loadAll()` on mount).
+  - `store/useFinanceStore.ts` — Zustand store for both `spending` and `subscriptions` collections (mirrors `useTaskStore`'s fetch/optimistic-update pattern).
+  - `components/Overview.tsx`, `SpendingView.tsx`, `SubscriptionsView.tsx` — the three tabs.
+  - `components/SpendingModal.tsx`, `SubscriptionModal.tsx` — create/edit forms, reusing the shared `.modal`/`.field`/`.btn` classes from `App.css`.
+  - `types.ts`, `constants.ts` (expense categories, payment methods), `utils.ts` (currency formatting, month filtering, category grouping, upcoming-payment calculation), `finance.css` (Finance-only layout classes).
+  - All spending/subscription data is fetched once and filtered/aggregated client-side (same pattern as Planner fetching all tasks and filtering by week) — there's no server-side date-range filtering.
 
 **Task model** (`src/types.ts`): a `Task` has `date` (`YYYY-MM-DD`), `startTime`/`endTime` (`HH:mm` 24h), optional `notes`/`category`/`color`, `completed`, and `recurringId`.
 
@@ -39,7 +52,12 @@ This is an Electron + React desktop app for planning weekly tasks on a drag/resi
 
 **Drag/resize interaction model** (`src/components/WeekGrid.tsx`): task move/resize is implemented with raw `pointermove`/`pointerup` window listeners and a local `Interaction` state machine (not a drag-and-drop library), snapping to `SNAP_MINUTES` (15 min). `src/utils/layout.ts` does greedy interval-graph coloring to lay out same-day overlapping tasks into side-by-side columns.
 
-**API contract:** REST-ish routes on `/api/tasks` (`GET`, `POST`, `PUT /:id`, `DELETE /:id?scope=`) — see `server/index.js` for validation rules (e.g. `endTime` must be after `startTime`, enforced both client-side in `TaskModal.tsx` and server-side).
+**Finance model** (`src/finance/types.ts`): `Spending` has `amount`, `date` (`YYYY-MM-DD`), `category`, `merchant`, optional `notes`/`paymentMethod`. `Subscription` has `name`, `monthlyPrice`, `billingDate` (day-of-month integer 1–31, clamped to the actual days in short months when computing next occurrence), optional `category`/`notes`, and `active`. Only `active` subscriptions count toward monthly/yearly totals and upcoming-payment lists (`getUpcomingPayments` in `src/finance/utils.ts`).
+
+**API contract:**
+- `/api/tasks` — `GET`, `POST`, `PUT /:id`, `DELETE /:id?scope=` — see `server/index.js` for validation rules (e.g. `endTime` must be after `startTime`, enforced both client-side in `TaskModal.tsx` and server-side).
+- `/api/spending` — `GET`, `POST`, `PUT /:id`, `DELETE /:id` — requires `amount` (positive number), `date`, `category`, `merchant`.
+- `/api/subscriptions` — `GET`, `POST`, `PUT /:id`, `DELETE /:id` — requires `name`, `monthlyPrice` (≥ 0), `billingDate` (integer 1–31).
 
 ## Config notes
 
