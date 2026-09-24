@@ -4,6 +4,23 @@
   "version": "0.0.0",
   "type": "module",
   "main": "electron/main.js",
+  "build": {
+    "appId": "com.amirmahdavieh.lifeos",
+    "productName": "LifeOS",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "dist/**/*",
+      "!server/tasks.db",
+      "!server/tasks.db-journal"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",

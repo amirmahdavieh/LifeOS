@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ⚠️ Known broken state: `package.json` is missing `scripts` and `devDependencies`
 
-The `package.json` at the repo root currently has **no `scripts` block and no `devDependencies` block**, even though `package-lock.json` and `node_modules` still contain them (vite, electron, electron-builder, concurrently, oxlint, typescript, @types/*). This means `npm run dev` / `npm run build` etc. do not currently work, despite `dev.cmd` and the `.claude/launch.json` "dev" config both invoking `npm run dev`.
+The `package.json` at the repo root currently has **no `scripts` block and no `devDependencies` block**, even though `package-lock.json` and `node_modules` still contain them (vite, electron, electron-builder, concurrently, oxlint, typescript, @types/*). This means `npm run dev` / `npm run build` etc. do not currently work, despite `dev.cmd` and the `.claude/launch.json` "dev" config both invoking `npm run dev`. (A `build` block for electron-builder *was* added back — see below — but `scripts`/`devDependencies` are still missing.)
 
 Until `package.json` is repaired, use the underlying binaries directly (all already installed in `node_modules/.bin`):
 
@@ -15,7 +15,7 @@ Until `package.json` is repaired, use the underlying binaries directly (all alre
 - Typecheck: `npx tsc -b`
 - Lint: `npx oxlint`
 - Production build: `npx tsc -b && npx vite build` (outputs to `dist/`, which `server/index.js` serves as static files when present)
-- Package the Electron app: `npx electron-builder` (a `release/` build already exists from a prior run; no `build` config is currently present in `package.json`, so this will likely need one restored before it works)
+- Package the Electron app: `npx electron-builder --win` (outputs to `release/`, per the `build.directories.output` config in `package.json` — leaving this unset defaults to `dist/`, which collides with Vite's own build output dir, so don't remove it)
 
 If asked to fix this, restore `scripts` (dev/build/lint/etc.) and `devDependencies` to `package.json` from what's already resolved in `package-lock.json`'s root `""` package entry.
 
