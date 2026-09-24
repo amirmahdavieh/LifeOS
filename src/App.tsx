@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { PlannerView } from './planner/PlannerView';
 import { FinanceApp } from './finance/FinanceApp';
+import { useDailySpendingReminder } from './finance/useSpendingReminder';
 import './App.css';
 
 type LifeOSModule = 'planner' | 'finance';
 
 function App() {
+  useDailySpendingReminder();
   const [module, setModule] = useState<LifeOSModule>('planner');
 
   return (

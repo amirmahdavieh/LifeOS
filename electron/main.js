@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.setName('LifeOS');
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.amirmahdavieh.lifeos');
+}
 
 // db.js resolves its own OS-standard data directory, so the dev server,
 // `electron .`, and the packaged app all read/write the same database file.
